@@ -2,34 +2,26 @@ package com.example.frontend;
 
 import com.sun.security.jgss.ExtendedGSSCredential;
 import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.Setter;
 import org.ietf.jgss.*;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
-import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.AuthorityUtils;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.kerberos.authentication.KerberosServiceRequestToken;
 import org.springframework.web.filter.OncePerRequestFilter;
-import org.springframework.web.reactive.function.client.WebClient;
 
 import javax.security.auth.Subject;
 import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.auth.login.Configuration;
 import javax.security.auth.login.LoginContext;
 import javax.security.auth.login.LoginException;
-import java.io.IOException;
 import java.security.PrivilegedExceptionAction;
 import java.util.Base64;
-import java.util.List;
 import java.util.Map;
 
-public class KerberosFilter extends OncePerRequestFilter {
+public class DelegationFilter extends OncePerRequestFilter {
 
     private final static String KRB_OID_TAG = "1.2.840.113554.1.2.2";
     private final static String SPNEGO_OID_TAG = "1.3.6.1.5.5.2";
@@ -37,11 +29,9 @@ public class KerberosFilter extends OncePerRequestFilter {
     private final String servicePrincipal;
     private final String targetSpn;
 
-    @Setter
-    private AuthenticationManager authManager;
     private final Configuration jaasConfig;
 
-    public KerberosFilter(String servicePrincipal, String keytabPath, String targetSpn, String krb5ConfigPath) {
+    public DelegationFilter(String servicePrincipal, String keytabPath, String targetSpn, String krb5ConfigPath) {
 
         this.servicePrincipal = servicePrincipal;
         this.targetSpn = targetSpn;
@@ -53,7 +43,7 @@ public class KerberosFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+                                    FilterChain filterChain) {
 
 
         var authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
@@ -79,7 +69,6 @@ public class KerberosFilter extends OncePerRequestFilter {
 
     }
 
-
     private Subject loginAsService() throws LoginException {
         LoginContext lc = new LoginContext("ServiceLogin", null, null, this.jaasConfig);
         lc.login();
@@ -101,13 +90,11 @@ public class KerberosFilter extends OncePerRequestFilter {
                 GSSCredential.INITIATE_ONLY
         );
 
-        // S4U2Self
-        GSSCredential s4u2selfCred = ((ExtendedGSSCredential) serviceCred)
-                .impersonate(userName);
+        GSSCredential s4u2selfCred = ((ExtendedGSSCredential) serviceCred).impersonate(userName);
 
         System.out.println("Successfully performed S4U2Self for: " + userName);
 
-        return s4u2selfCred; // Can now use this cred to perform S4U2Proxy
+        return s4u2selfCred;
     }
 
     void processKerberosRequest(String authHeader, String targetSpn) throws Exception {
@@ -120,7 +107,6 @@ public class KerberosFilter extends OncePerRequestFilter {
 
             GSSManager manager = GSSManager.getInstance();
 
-            // Accept user's security context
             GSSCredential serviceCredential = manager.createCredential(
                     null,
                     GSSCredential.DEFAULT_LIFETIME,
@@ -132,11 +118,11 @@ public class KerberosFilter extends OncePerRequestFilter {
             if (userContext.isEstablished()) {
                 System.out.println("Authenticated user: " + userContext.getSrcName());
 
-                // Perform constrained delegation (S4U2Proxy)
+                // constrained delegation or S4U2Proxy
                 GSSCredential impersonationCred = userContext.getDelegCred();
 
                 if (impersonationCred == null) {
-                    // No delegated creds; must use S4U2Proxy explicitly
+                    // do it explicitly
                     impersonationCred = performS4U2Proxy(manager, userContext.getSrcName(), krbOid);
                 }
 
@@ -172,8 +158,9 @@ public class KerberosFilter extends OncePerRequestFilter {
         byte[] outToken = backendContext.initSecContext(new byte[0], 0, 0);
 
         if (outToken != null) {
-            String negotiateHeader = "Negotiate " + Base64.getEncoder().encodeToString(outToken);
 
+            // save the token in the details field for later use
+            String negotiateHeader = "Negotiate " + Base64.getEncoder().encodeToString(outToken);
             var authorities = AuthorityUtils.createAuthorityList("ROLE_USER");
             var auth = new UsernamePasswordAuthenticationToken(delegatedCred.getName(), delegatedCred, authorities);
             auth.setDetails(negotiateHeader);
@@ -202,7 +189,7 @@ public class KerberosFilter extends OncePerRequestFilter {
                         "storeKey", "true",
                         "useKeyTab", "true",
                         "doNotPrompt", "true",
-                        "isInitiator", "true", // Must be true for delegation
+                        "isInitiator", "true",
                         "refreshKrb5Config", "true"
                 );
                 return new AppConfigurationEntry[]{
