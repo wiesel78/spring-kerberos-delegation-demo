@@ -2,6 +2,7 @@ package com.example.frontend;
 
 import com.sun.security.jgss.ExtendedGSSCredential;
 import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.ietf.jgss.*;
@@ -17,6 +18,7 @@ import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.auth.login.Configuration;
 import javax.security.auth.login.LoginContext;
 import javax.security.auth.login.LoginException;
+import java.io.IOException;
 import java.security.PrivilegedExceptionAction;
 import java.util.Base64;
 import java.util.Map;
@@ -43,10 +45,16 @@ public class DelegationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
-                                    FilterChain filterChain) {
+                                    FilterChain filterChain) throws ServletException, IOException {
 
 
         var authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
+
+        if (request.getServletPath().startsWith("/unauth")) {
+            // Allow unauthenticated access to the blub endpoint
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         // if no auth header is present, initiate the negotiate authentication
         if (authHeader == null) {

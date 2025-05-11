@@ -5,8 +5,8 @@ services:
       context: .
       dockerfile: Dockerfile
     networks:
-      - backend_network
+      - delegation_network
 
 networks:
-  backend_network:
+  delegation_network:
     driver: bridge
