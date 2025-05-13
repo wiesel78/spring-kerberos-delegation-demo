@@ -103,3 +103,10 @@ you can check the dns records with
 Get-DnsServerResourceRecord -ZoneName "IAM.DEV" | Where-Object HostName -in "web", "frontend", "backend", "kdc"
 ```
 
+### Add domains to trusted domains
+
+to allow browsers authenticating on this domains, we have to add them to the trusted domains
+
+* `Win+R` -> `inetcpl.cpl`
+* `Security` -> `Local Intranet` -> `Sites`
+* add the domains `*.iam.dev` and `*.kdc.iam.dev`
