@@ -26,10 +26,19 @@ New-VMSwitch -Name $VMSwitch -NetAdapterName $NetAdapterName -AllowManagementOS 
 ```powershell (as Admin)
 $VhdPath = "./windows-server-2025.vhdx"
 $VMName = "WindowsServer2025"
-$VMMemory = "8GB"
+$VMMemory = 8GB
 $VMSwitch = "ExternalSwitch"
 
-New-VM -Name $VMname -MemoryStartupBytes $VMMemory -VHDPath $VhdPath -Generation 2 -SwitchName $VMSwitch -ErrorAction Stop
+New-VM `
+    -Name $VMName `
+    -MemoryStartupBytes $VMMemory `
+    -VHDPath $VhdPath `
+    -Generation 2 `
+    -SwitchName $VMSwitch `
+    -ErrorAction Stop `
+    -Path (Get-Location)
+
+Set-VM -Name $VMName -CheckpointType Disabled
 ```
 
 
