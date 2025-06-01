@@ -1,0 +1,33 @@
+[kdcdefaults]
+    kdc_ports = 8088
+
+[logging]
+    kdc = FILE:/var/log/krb5kdc.log
+
+[realms]
+    ${REALM} = {
+        database_name = /var/lib/krb5kdc/principal
+        admin_keytab = FILE:/etc/krb5kdc/kadm5.keytab
+        acl_file = /etc/krb5kdc/kadm5.acl
+        key_stash_file = /etc/krb5kdc/stash
+        kdc_ports = 8088
+        kdc_tcp_ports = 8088
+        kadmind_port = 8750
+        max_life = 10h 0m 0s
+        max_renewable_life = 7d 0h 0m 0s
+        #master_key_type = aes256-cts
+        supported_enctypes = aes256-cts:normal aes128-cts:normal
+        default_principal_flags = +preauth +forwardable +proxiable +ok_as_delegate
+        database_module = OPENLDAP
+    }
+
+[dbmodules]
+    OPENLDAP = {
+        db_library = kldap
+        ldap_kerberos_container_dn = ${LDAP_KRB_CONTAINER_DN}
+        ldap_kdc_dn = ${LDAP_SERVICE_DN}
+        ldap_kadmind_dn = ${LDAP_SERVICE_DN}
+        ldap_service_password_file = ${LDAP_STASH_FILE_PATH}
+        ldap_servers = ldapi:///
+        ldap_conns_per_server = 5
+    }

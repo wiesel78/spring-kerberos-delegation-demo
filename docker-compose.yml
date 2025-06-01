@@ -1,4 +1,23 @@
 services:
+
+
+  mit:
+    container_name: mit
+    build:
+      context: ./kdc/mit
+      dockerfile: ./Dockerfile
+#      args:
+#        APT_MIRROR: "ftp.uni-stuttgart.de"
+    ports:
+      - "8088:8088/tcp"
+      - "8088:8088/udp"
+      - "8750:8750/tcp"
+    networks:
+      - delegation_network
+#    network_mode: host
+    volumes:
+      - ./kdc/mit/keytabs:/etc/keytabs
+
   kerby:
     container_name: kerby
     build:
@@ -30,6 +49,18 @@ services:
       - delegation_network
     volumes:
       - ./client/kerby-krb5.conf:/etc/krb5.conf
+
+  mit-client:
+    container_name: mit-client
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+#    network_mode: host
+    networks:
+      - delegation_network
+    volumes:
+      - ./client/mit-krb5.conf:/etc/krb5.conf
+      - ./kdc/mit/keytabs:/etc/keytabs
 
 networks:
   delegation_network:

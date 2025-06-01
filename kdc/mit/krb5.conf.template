@@ -1,0 +1,37 @@
+[libdefaults]
+    default_realm = ${REALM}
+    kdc_timesync = 1
+    ccache_type = 4
+    forwardable = true
+    proxiable = true
+    dns_lookup_kdc = false
+    dns_lookup_realm = false
+    rdns = false
+    fcc-mit-ticketflags = true
+    permitted_enctypes = aes256-cts-hmac-sha1-96 aes128-cts-hmac-sha1-96
+    default_tkt_enctypes = aes256-cts-hmac-sha1-96 aes128-cts-hmac-sha1-96
+    default_tgs_enctypes = aes256-cts-hmac-sha1-96 aes128-cts-hmac-sha1-96
+    udp_preference_limit = 1
+
+[realms]
+    ${REALM} = {
+        kdc = ${KDC_HOSTNAME}:8088
+        admin_server = ${KDC_HOSTNAME}:8750
+        default_domain = ${DOMAIN}
+        database_module = OPENLDAP
+    }
+
+[domain_realm]
+    .${DOMAIN} = ${REALM}
+    ${DOMAIN} = ${REALM}
+
+[dbmodules]
+    OPENLDAP = {
+        db_library = kldap
+        ldap_kerberos_container_dn = ${LDAP_KRB_CONTAINER_DN}
+        ldap_kdc_dn = ${LDAP_SERVICE_DN}
+        ldap_kadmind_dn = ${LDAP_SERVICE_DN}
+        ldap_service_password_file = ${LDAP_STASH_FILE_PATH}
+        ldap_servers = ldapi:///
+    }
+
