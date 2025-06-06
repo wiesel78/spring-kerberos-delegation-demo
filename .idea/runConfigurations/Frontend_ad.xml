@@ -1,0 +1,9 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Frontend-ad" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <module name="frontend" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="com.example.frontend.FrontendApplication" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

@@ -1,0 +1,14 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Backend-mit" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <option name="ACTIVE_PROFILES" value="mit" />
+    <envs>
+      <env name="KRB5_CONFIG" value="backend/src/main/resources/kerberos/mit-krb5.conf" />
+    </envs>
+    <module name="backend" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="com.example.backend.BackendApplication" />
+    <option name="VM_PARAMETERS" value="-Djava.security.krb5.realm=IAM.DEV -Djava.security.krb5.kdc=localhost:8088" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>
