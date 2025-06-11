@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.ietf.jgss.*;
 import org.springframework.http.HttpHeaders;
+import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.AuthorityUtils;
@@ -44,8 +45,8 @@ public class DelegationFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+                                    @NonNull HttpServletResponse response,
+                                    @NonNull FilterChain filterChain) throws ServletException, IOException {
 
 
         var authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
@@ -68,7 +69,9 @@ public class DelegationFilter extends OncePerRequestFilter {
         }
 
         try {
-            processKerberosRequest(authHeader, targetSpn.replace("/", "@"));
+            var spn = targetSpn.replace("/", "@");
+//            var spn = targetSpn;
+            processKerberosRequest(authHeader, spn);
 
             filterChain.doFilter(request, response);
         } catch (Exception e) {
