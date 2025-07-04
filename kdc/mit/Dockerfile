@@ -102,4 +102,3 @@ EXPOSE 389
 EXPOSE 636
 
 CMD ["/entrypoint.sh"]
-#CMD tail -f /dev/null
