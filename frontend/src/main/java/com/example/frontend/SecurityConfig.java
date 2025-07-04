@@ -20,9 +20,6 @@ public class SecurityConfig {
     @Value("${kerberos.service-principal}")
     private String servicePrincipal;
 
-    @Value("${backend.spn}")
-    private String backendSpn;
-
     @Value("${kerberos.krb5ConfigPath}")
     private String krb5ConfigPath;
 
@@ -37,13 +34,15 @@ public class SecurityConfig {
                     .requestMatchers("/unauth/*").permitAll()
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                     .anyRequest().authenticated())
-            .addFilterBefore(filter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(filter, UsernamePasswordAuthenticationFilter.class)
+            .exceptionHandling(ex -> ex
+                    .authenticationEntryPoint(new NegotiateAuthenticationEntryPoint()));
 
         return http.build();
     }
 
     @Bean
     public DelegationFilter delegationFilter() {
-        return new DelegationFilter(servicePrincipal, keytab, backendSpn, krb5ConfigPath);
+        return new DelegationFilter(servicePrincipal, keytab, krb5ConfigPath);
     }
 }

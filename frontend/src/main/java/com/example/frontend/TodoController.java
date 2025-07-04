@@ -1,7 +1,8 @@
 package com.example.frontend;
 
 
-import org.springframework.beans.factory.annotation.Qualifier;
+import org.ietf.jgss.GSSException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -11,9 +12,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/todos")
@@ -21,12 +20,15 @@ public class TodoController {
 
     private final WebClient.Builder clientBuilder;
 
+    @Value("${backend.spn}")
+    private String backendSpn;
+
     public TodoController(WebClient.Builder clientBuilder) {
         this.clientBuilder = clientBuilder;
     }
 
     @GetMapping
-    public ResponseEntity<List<TodoDto>> getAllTodos() {
+    public ResponseEntity<List<TodoDto>> getAllTodos() throws GSSException {
         var webClient = getWebClient();
         var response = webClient
                 .get()
@@ -46,7 +48,7 @@ public class TodoController {
     }
 
     @PostMapping
-    public ResponseEntity<TodoDto> createTodo(@RequestBody TodoDto dto) {
+    public ResponseEntity<TodoDto> createTodo(@RequestBody TodoDto dto) throws GSSException {
 
         var webClient = getWebClient();
         var response = webClient
@@ -66,9 +68,9 @@ public class TodoController {
                 .body(response);
     }
 
-    private WebClient getWebClient() {
-        var auth = SecurityContextHolder.getContext().getAuthentication();
-        var authHeader = (String)auth.getDetails();
+    private WebClient getWebClient() throws GSSException {
+        var auth = (DelegationAuthToken)SecurityContextHolder.getContext().getAuthentication();
+        var authHeader = DelegationFilter.createBackendToken(auth.getDelegationCredential(), backendSpn);
         return clientBuilder
                 .defaultHeader(HttpHeaders.AUTHORIZATION, authHeader)
                 .build();
