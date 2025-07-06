@@ -28,6 +28,8 @@ services:
     build:
       context: ./client
       dockerfile: Dockerfile
+    extra_hosts:
+      - "frontend.iam.dev:host-gateway"
     networks:
       - delegation_network
     volumes:
@@ -61,3 +63,4 @@ services:
 networks:
   delegation_network:
     driver: bridge
+    
