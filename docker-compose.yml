@@ -1,5 +1,11 @@
 services:
-
+  ad-client:
+    container_name: ad-client
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    networks:
+      - delegation_network
 
   mit:
     container_name: mit
@@ -14,8 +20,18 @@ services:
       - "8750:8750/tcp"
     networks:
       - delegation_network
-#    network_mode: host
     volumes:
+      - ./kdc/mit/keytabs:/etc/keytabs
+
+  mit-client:
+    container_name: mit-client
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    networks:
+      - delegation_network
+    volumes:
+      - ./client/mit-krb5.conf:/etc/krb5.conf
       - ./kdc/mit/keytabs:/etc/keytabs
 
   kerby:
@@ -32,14 +48,6 @@ services:
     networks:
       - delegation_network
 
-  ad-client:
-    container_name: ad-client
-    build:
-      context: ./client
-      dockerfile: Dockerfile
-    networks:
-      - delegation_network
-
   kerby-client:
     container_name: kerby-client
     build:
@@ -49,18 +57,6 @@ services:
       - delegation_network
     volumes:
       - ./client/kerby-krb5.conf:/etc/krb5.conf
-
-  mit-client:
-    container_name: mit-client
-    build:
-      context: ./client
-      dockerfile: Dockerfile
-#    network_mode: host
-    networks:
-      - delegation_network
-    volumes:
-      - ./client/mit-krb5.conf:/etc/krb5.conf
-      - ./kdc/mit/keytabs:/etc/keytabs
 
 networks:
   delegation_network:
