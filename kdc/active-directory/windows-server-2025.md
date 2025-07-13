@@ -30,10 +30,19 @@ New-ADUser -Name "user2" -SamAccountName "user2" -UserPrincipalName "user2@IAM.D
 New-ADUser -Name "user3" -SamAccountName "user3" -UserPrincipalName "user3@IAM.DEV" -Path "CN=Users,DC=IAM,DC=DEV" -AccountPassword $SecurePassword -Enabled $true -PasswordNeverExpires $true -ChangePasswordAtLogon $false
 ```
 
-### Add frontend and backend service principals
+### Add prefrontend, frontend and backend service principals
 
 ```powershell
 $SecurePassword = Read-Host -AsSecureString "Enter Password"
+
+New-ADUser `
+    -Name "PreFrontend Service Account" `
+    -SamAccountName "prefrontend_svc" `
+    -UserPrincipalName "HTTP/prefrontend.iam.dev@IAM.DEV" `
+    -Path "CN=Users,DC=IAM,DC=DEV" `
+    -AccountPassword $SecurePassword `
+    -Enabled $true `
+    -ServicePrincipalNames "HTTP/prefrontend.iam.dev"
 
 New-ADUser `
     -Name "Frontend Service Account" `
@@ -56,9 +65,17 @@ New-ADUser `
 
 ### Add permission to delegate
 
-The frontend service account needs permission to delegate to the backend service account.
+The prefrontend and frontend service account needs permission to delegate to the backend service account.
 
 ```powershell
+Set-ADAccountControl -Identity prefrontend_svc -TrustedToAuthForDelegation $true
+Set-ADUser -Identity prefrontend_svc -Add @{
+    'msDS-AllowedToDelegateTo' = 'HTTP/frontend.iam.dev'
+}
+Set-ADUser -Identity "prefrontend_svc" -Replace @{
+    "msDS-SupportedEncryptionTypes" = 0x18
+}
+
 Set-ADAccountControl -Identity frontend_svc -TrustedToAuthForDelegation $true
 Set-ADUser -Identity frontend_svc -Add @{
     'msDS-AllowedToDelegateTo' = 'HTTP/backend.iam.dev'
@@ -78,6 +95,7 @@ Set-ADUser -Identity "backend_svc" -Replace @{
 $SecurePassword = "P@ssw0rd123"
 
 mkdir ~/keytabs
+ktpass -out C:\Users\Administrator\keytabs\prefrontend.keytab -princ HTTP/prefrontend.iam.dev@IAM.DEV -mapuser prefrontend_svc@IAM.DEV -pass $SecurePassword -ptype KRB5_NT_PRINCIPAL -crypto AES256-SHA1
 ktpass -out C:\Users\Administrator\keytabs\frontend.keytab -princ HTTP/frontend.iam.dev@IAM.DEV -mapuser frontend_svc@IAM.DEV -pass $SecurePassword -ptype KRB5_NT_PRINCIPAL -crypto AES256-SHA1
 ktpass -out C:\Users\Administrator\keytabs\backend.keytab -princ HTTP/backend.iam.dev@IAM.DEV -mapuser backend_svc@IAM.DEV -pass $SecurePassword -ptype KRB5_NT_PRINCIPAL -crypto AES256-SHA1
 ```
@@ -90,6 +108,7 @@ services and kdc domains (host is maybe with ipconfig → gateway)
 ```powershell
 $hostIp = "192.168.1.2"
 Add-DnsServerResourceRecordA -Name "web" -ZoneName "IAM.DEV" -IPv4Address $hostIp
+Add-DnsServerResourceRecordA -Name "prefrontend" -ZoneName "IAM.DEV" -IPv4Address $hostIp
 Add-DnsServerResourceRecordA -Name "frontend" -ZoneName "IAM.DEV" -IPv4Address $hostIp
 Add-DnsServerResourceRecordA -Name "backend" -ZoneName "IAM.DEV" -IPv4Address $hostIp
 
@@ -100,7 +119,7 @@ Add-DnsServerResourceRecordA -Name "kdc" -ZoneName "IAM.DEV" -IPv4Address $vmIp
 you can check the dns records with
 
 ```powershell
-Get-DnsServerResourceRecord -ZoneName "IAM.DEV" | Where-Object HostName -in "web", "frontend", "backend", "kdc"
+Get-DnsServerResourceRecord -ZoneName "IAM.DEV" | Where-Object HostName -in "web", "prefrontend", "frontend", "backend", "kdc"
 ```
 
 ### Add domains to trusted domains

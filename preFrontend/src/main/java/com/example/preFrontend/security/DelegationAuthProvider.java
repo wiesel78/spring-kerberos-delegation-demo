@@ -1,27 +1,26 @@
-package com.example.frontend;
+package com.example.preFrontend.security;
 
+import com.example.preFrontend.configs.KerberosConfig;
 import com.sun.security.jgss.ExtendedGSSCredential;
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import org.ietf.jgss.*;
-import org.springframework.http.HttpHeaders;
-import org.springframework.lang.NonNull;
+import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.stereotype.Component;
 
 import javax.security.auth.Subject;
 import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.auth.login.Configuration;
 import javax.security.auth.login.LoginContext;
 import javax.security.auth.login.LoginException;
-import java.io.IOException;
 import java.util.Base64;
 import java.util.Map;
 
-public class DelegationFilter extends OncePerRequestFilter {
-
+@Component
+public class DelegationAuthProvider implements AuthenticationProvider {
+    
     private final static String KRB_OID_TAG = "1.2.840.113554.1.2.2";
     private final static String SPNEGO_OID_TAG = "1.3.6.1.5.5.2";
 
@@ -37,56 +36,46 @@ public class DelegationFilter extends OncePerRequestFilter {
         }
     }
 
-    private final String servicePrincipal;
     private final Configuration jaasConfig;
+    private final KerberosConfig kerberosConfig;
 
-    public DelegationFilter(String servicePrincipal, String keytabPath, String krb5ConfigPath) {
+    
+    public DelegationAuthProvider(KerberosConfig kerberosConfig) {
 
-        this.servicePrincipal = servicePrincipal;
+        this.kerberosConfig = kerberosConfig;
 
-        setSystemProperties(krb5ConfigPath, keytabPath);
-        this.jaasConfig = getJaasConfig(keytabPath, this.servicePrincipal);
+        setSystemProperties(kerberosConfig.getKrb5ConfigPath(), kerberosConfig.getKeytab());
+        this.jaasConfig = getJaasConfig(kerberosConfig.getKeytab(), kerberosConfig.getServicePrincipal());
     }
 
     @Override
-    protected void doFilterInternal(@NonNull HttpServletRequest request,
-                                    @NonNull HttpServletResponse response,
-                                    @NonNull FilterChain filterChain) throws ServletException, IOException {
-
-        var authentication = SecurityContextHolder.getContext().getAuthentication();
-        if(authentication != null && authentication.isAuthenticated()) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
-        var authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
-
-        // if no auth header is present, initiate the negotiate authentication
-        if (authHeader == null || !authHeader.trim().startsWith("Negotiate ")) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
+    public Authentication authenticate(Authentication authentication) throws AuthenticationException {
+        
         try {
+            var authToken = (DelegationAuthToken) authentication;
+
             var serviceSubject = loginAsService();
-            var authToken = new DelegationAuthToken(authHeader);
             var userContext = authenticateUser(serviceSubject, authToken.getUserToken());
             var delegatedToken = createDelegationCredentials(serviceSubject, userContext);
 
             authToken.setDelegationCredential(delegatedToken);
-
             if (authToken.isAuthenticated()) {
                 SecurityContextHolder.getContext().setAuthentication(authToken);
             }
 
             userContext.dispose();
-
-            filterChain.doFilter(request, response);
+            
+            return authToken;
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            throw new BadCredentialsException(e.getMessage());
         }
-
     }
+
+    @Override
+    public boolean supports(Class<?> authentication) {
+        return DelegationAuthToken.class.isAssignableFrom(authentication);
+    }
+
 
     /**
      * Logs in as the service principal using JAAS.
@@ -148,7 +137,7 @@ public class DelegationFilter extends OncePerRequestFilter {
                 return impersonationCred;
             }
         } catch (Exception e) {
-            // ignore 
+            // ignore
         }
 
         return Subject.callAs(serviceSubject, () -> {
@@ -156,7 +145,7 @@ public class DelegationFilter extends OncePerRequestFilter {
             Oid krbOid = new Oid(KRB_OID_TAG);
 
             GSSCredential serviceCred = manager.createCredential(
-                    manager.createName(servicePrincipal, GSSName.NT_USER_NAME),
+                    manager.createName(kerberosConfig.getServicePrincipal(), GSSName.NT_USER_NAME),
                     GSSCredential.INDEFINITE_LIFETIME,
                     krbOid,
                     GSSCredential.INITIATE_ONLY

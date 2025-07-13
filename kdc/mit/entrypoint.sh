@@ -49,11 +49,20 @@ mkdir -p ${KEYTABS_PATH}
 
 kadmin.local -q "addprinc -pw ${ADMIN_PRINC_PASS} admin/admin@${REALM}"
 kadmin.local -q "addprinc -pw P@ssw0rd123 +preauth +forwardable +proxiable +ok_as_delegate user1@${REALM}"
+kadmin.local -q "addprinc -randkey +ok_to_auth_as_delegate +ok_as_delegate +preauth HTTP/prefrontend.${DOMAIN}@${REALM}"
+kadmin.local -q "ktadd -k ${KEYTABS_PATH}/prefrontend.keytab HTTP/prefrontend.${DOMAIN}@${REALM}"
 kadmin.local -q "addprinc -randkey +ok_to_auth_as_delegate +ok_as_delegate +preauth HTTP/frontend.${DOMAIN}@${REALM}"
 kadmin.local -q "ktadd -k ${KEYTABS_PATH}/frontend.keytab HTTP/frontend.${DOMAIN}@${REALM}"
 kadmin.local -q "addprinc -randkey +preauth +ok_as_delegate HTTP/backend.${DOMAIN}@${REALM}"
 kadmin.local -q "ktadd -k ${KEYTABS_PATH}/backend.keytab HTTP/backend.${DOMAIN}@${REALM}"
 
+ldapmodify -x -D ${LDAP_ADMIN_DN} -y /tmp/ldap_admin_password -H ldapi:/// <<EOF
+dn: krbPrincipalName=HTTP/prefrontend.${DOMAIN}@${REALM},cn=${REALM},${LDAP_KRB_CONTAINER_DN}
+changetype: modify
+add: krbAllowedToDelegateTo
+krbAllowedToDelegateTo: HTTP/frontend.${DOMAIN}@${REALM}
+krbAllowedToDelegateTo: HTTP/backend.${DOMAIN}@${REALM}
+EOF
 
 ldapmodify -x -D ${LDAP_ADMIN_DN} -y /tmp/ldap_admin_password -H ldapi:/// <<EOF
 dn: krbPrincipalName=HTTP/frontend.${DOMAIN}@${REALM},cn=${REALM},${LDAP_KRB_CONTAINER_DN}
