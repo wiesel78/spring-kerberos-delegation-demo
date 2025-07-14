@@ -30,6 +30,7 @@ services:
       dockerfile: Dockerfile
     extra_hosts:
       - "frontend.iam.dev:host-gateway"
+      - "prefrontend.iam.dev:host-gateway"
     networks:
       - delegation_network
     volumes:
