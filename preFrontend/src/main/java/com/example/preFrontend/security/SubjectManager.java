@@ -29,9 +29,59 @@ public class SubjectManager {
     }
 
     /**
+     * check the subject for expiration
+     * 
+     * @param subject subject to validate
+     * @return true, if subject is not expired, false, otherwise
+     */
+    public boolean isValid(Subject subject){
+        if(subject == null) {
+            return false;
+        }
+        
+        return subject.getPrivateCredentials(KerberosTicket.class).stream()
+                .anyMatch(KerberosTicket::isCurrent);
+    }
+
+    /**
+     * Login as the service principal using JAAS.
+     *
+     * @return the Subject representing the service principal
+     * @throws LoginException if the keytab or principal is invalid
+     */
+    public Subject loginAsService() throws LoginException {
+        LoginContext lc = createLoginContext();
+        lc.login();
+        return lc.getSubject();
+    }
+    
+    /**
+     * get the current available and valid subject if exist or login
+     * and create so a new subject.
+     * 
+     * @return a valid subject
+     * @throws LoginException if the service login failed
+     */
+    public Subject getOrCreate() throws LoginException {
+        if (isValid(serviceSubject)) {
+            return serviceSubject;
+        }
+        
+        synchronized (lock) {
+            if (isValid(serviceSubject)) {
+                return serviceSubject;
+            }
+            
+            serviceSubject = loginAsService();
+            return serviceSubject;
+        }
+    }
+    
+    /**
      * run the given method in context of the service subject.
      * if the service subject is expired or not available, it will
      * create a new subject
+     * 
      * @param action the code that should be run in the context of the subject
      * @return the return object of the action
      * @param <T> the return type of the action
@@ -51,44 +101,12 @@ public class SubjectManager {
             }
         }
     }
-
-    private boolean isValid(Subject subject){
-        if(subject == null) {
-            return false;
-        }
-        
-        return subject.getPrivateCredentials(KerberosTicket.class).stream()
-                .anyMatch(KerberosTicket::isCurrent);
-    }
     
-    private Subject getOrCreate() throws LoginException {
-        if (isValid(serviceSubject)) {
-            return serviceSubject;
-        }
-        
-        synchronized (lock) {
-            if (isValid(serviceSubject)) {
-                return serviceSubject;
-            }
-            
-            serviceSubject = loginAsService();
-            return serviceSubject;
-        }
-    }
-    
-    /**
-     * Login as the service principal using JAAS.
-     *
-     * @return the Subject representing the service principal
-     * @throws LoginException if the keytab or principal is invalid
-     */
-    private Subject loginAsService() throws LoginException {
-        LoginContext lc = new LoginContext("ServiceLogin", null, null, this.jaasConfig);
-        lc.login();
-        return lc.getSubject();
+    protected LoginContext createLoginContext() throws LoginException {
+        return new LoginContext("ServiceLogin", null, null, this.jaasConfig);
     }
 
-    private boolean isKerberosExpiredException(Exception e) {
+    protected boolean isKerberosExpiredException(Exception e) {
         Throwable cause = e.getCause();
         while (cause != null) {
             if (cause instanceof GSSException) {
