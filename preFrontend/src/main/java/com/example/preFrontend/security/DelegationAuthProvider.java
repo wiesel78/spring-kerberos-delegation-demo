@@ -11,6 +11,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
+import javax.naming.Name;
 import javax.security.auth.Subject;
 import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.auth.login.Configuration;
@@ -40,11 +41,13 @@ public class DelegationAuthProvider implements AuthenticationProvider {
 
     private final KerberosConfig kerberosConfig;
     private final SubjectManager subjectManager;
+    private final DelegationCredentialCache delegationCredentialCache;
 
     
-    public DelegationAuthProvider(KerberosConfig kerberosConfig, SubjectManager subjectManager) {
+    public DelegationAuthProvider(KerberosConfig kerberosConfig, SubjectManager subjectManager, DelegationCredentialCache delegationCredentialCache) {
         this.kerberosConfig = kerberosConfig;
         this.subjectManager = subjectManager;
+        this.delegationCredentialCache = delegationCredentialCache;
     }
 
     @Override
@@ -54,7 +57,9 @@ public class DelegationAuthProvider implements AuthenticationProvider {
             var authToken = (DelegationAuthToken) authentication;
 
             var userContext = authenticateUser(authToken.getUserToken());
-            var delegatedToken = createDelegationCredentials(userContext);
+            var delegatedToken = delegationCredentialCache.getOrCreate(
+                    String.valueOf(userContext.getSrcName()), 
+                    Name -> createDelegationCredentials(userContext));
 
             authToken.setDelegationCredential(delegatedToken);
             if (authToken.isAuthenticated()) {
