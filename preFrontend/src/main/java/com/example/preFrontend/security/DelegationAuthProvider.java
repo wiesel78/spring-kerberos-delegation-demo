@@ -2,6 +2,7 @@ package com.example.preFrontend.security;
 
 import com.example.preFrontend.configs.KerberosConfig;
 import com.sun.security.jgss.ExtendedGSSCredential;
+import lombok.extern.slf4j.Slf4j;
 import org.ietf.jgss.*;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -10,6 +11,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
+import javax.naming.Name;
 import javax.security.auth.Subject;
 import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.auth.login.Configuration;
@@ -19,6 +21,7 @@ import java.util.Base64;
 import java.util.Map;
 
 @Component
+@Slf4j
 public class DelegationAuthProvider implements AuthenticationProvider {
     
     private final static String KRB_OID_TAG = "1.2.840.113554.1.2.2";
@@ -36,16 +39,15 @@ public class DelegationAuthProvider implements AuthenticationProvider {
         }
     }
 
-    private final Configuration jaasConfig;
     private final KerberosConfig kerberosConfig;
+    private final SubjectManager subjectManager;
+    private final DelegationCredentialCache delegationCredentialCache;
 
     
-    public DelegationAuthProvider(KerberosConfig kerberosConfig) {
-
+    public DelegationAuthProvider(KerberosConfig kerberosConfig, SubjectManager subjectManager, DelegationCredentialCache delegationCredentialCache) {
         this.kerberosConfig = kerberosConfig;
-
-        setSystemProperties(kerberosConfig.getKrb5ConfigPath(), kerberosConfig.getKeytab());
-        this.jaasConfig = getJaasConfig(kerberosConfig.getKeytab(), kerberosConfig.getServicePrincipal());
+        this.subjectManager = subjectManager;
+        this.delegationCredentialCache = delegationCredentialCache;
     }
 
     @Override
@@ -54,9 +56,10 @@ public class DelegationAuthProvider implements AuthenticationProvider {
         try {
             var authToken = (DelegationAuthToken) authentication;
 
-            var serviceSubject = loginAsService();
-            var userContext = authenticateUser(serviceSubject, authToken.getUserToken());
-            var delegatedToken = createDelegationCredentials(serviceSubject, userContext);
+            var userContext = authenticateUser(authToken.getUserToken());
+            var delegatedToken = delegationCredentialCache.getOrCreate(
+                    String.valueOf(userContext.getSrcName()), 
+                    Name -> createDelegationCredentials(userContext));
 
             authToken.setDelegationCredential(delegatedToken);
             if (authToken.isAuthenticated()) {
@@ -67,6 +70,7 @@ public class DelegationAuthProvider implements AuthenticationProvider {
             
             return authToken;
         } catch (Exception e) {
+            log.warn("Authentication failed.", e);
             throw new BadCredentialsException(e.getMessage());
         }
     }
@@ -76,46 +80,37 @@ public class DelegationAuthProvider implements AuthenticationProvider {
         return DelegationAuthToken.class.isAssignableFrom(authentication);
     }
 
-
-    /**
-     * Logs in as the service principal using JAAS.
-     *
-     * @return the Subject representing the service principal
-     * @throws LoginException if the keytab or principal is invalid
-     */
-    private Subject loginAsService() throws LoginException {
-        LoginContext lc = new LoginContext("ServiceLogin", null, null, this.jaasConfig);
-        lc.login();
-        return lc.getSubject();
-    }
-
     /**
      * authenticate and validate the user ticket from the request header.
      * this has to happen every request.
      *
-     * @param serviceSubject the subject created with loginAsService
      * @param userTicket user ticket from the authorization header
      * @return user context that can be used to create the delegated credential
      */
-    private GSSContext authenticateUser(Subject serviceSubject, byte[] userTicket) {
-        return Subject.callAs(serviceSubject, () -> {
-            GSSManager manager = GSSManager.getInstance();
+    private GSSContext authenticateUser(byte[] userTicket) {
+        try {
+            return subjectManager.doAsService(() -> {
+                GSSManager manager = GSSManager.getInstance();
 
-            GSSCredential serviceCredential = manager.createCredential(
-                    null,
-                    GSSCredential.DEFAULT_LIFETIME,
-                    new Oid[]{SPNEGO_OID, KRB_OID},
-                    GSSCredential.ACCEPT_ONLY);
-            GSSContext userContext = manager.createContext(serviceCredential);
-            userContext.acceptSecContext(userTicket, 0, userTicket.length);
+                GSSCredential serviceCredential = manager.createCredential(
+                        null,
+                        GSSCredential.DEFAULT_LIFETIME,
+                        new Oid[]{SPNEGO_OID, KRB_OID},
+                        GSSCredential.ACCEPT_ONLY);
+                GSSContext userContext = manager.createContext(serviceCredential);
+                userContext.acceptSecContext(userTicket, 0, userTicket.length);
 
-            if (!userContext.isEstablished()) {
-                throw new SecurityException("Could not establish context with user");
-            }
+                if (!userContext.isEstablished()) {
+                    throw new SecurityException("Could not establish context with user");
+                }
 
-            serviceCredential.dispose();
-            return userContext;
-        });
+                serviceCredential.dispose();
+                return userContext;
+            });
+        } catch (LoginException e) {
+            log.error("Service login failed", e);
+            throw new RuntimeException(e);
+        }
     }
 
     /**
@@ -123,12 +118,10 @@ public class DelegationAuthProvider implements AuthenticationProvider {
      * backend services. this can be cached, but you have to validate the userContext
      * before on every request.
      *
-     * @param serviceSubject the subject created with loginAsService
      * @param userContext context represents the authenticated and validated user session
      * @return credential that can be used to create backend service tokens
-     * @throws GSSException if serviceSubject or userContext is invalid or kdc is misconfigured
      */
-    private GSSCredential createDelegationCredentials(Subject serviceSubject, GSSContext userContext) throws GSSException {
+    private GSSCredential createDelegationCredentials(GSSContext userContext) {
 
         try {
             GSSCredential impersonationCred = userContext.getDelegCred();
@@ -140,19 +133,24 @@ public class DelegationAuthProvider implements AuthenticationProvider {
             // ignore
         }
 
-        return Subject.callAs(serviceSubject, () -> {
-            var manager = GSSManager.getInstance();
-            Oid krbOid = new Oid(KRB_OID_TAG);
-
-            GSSCredential serviceCred = manager.createCredential(
-                    manager.createName(kerberosConfig.getServicePrincipal(), GSSName.NT_USER_NAME),
-                    GSSCredential.INDEFINITE_LIFETIME,
-                    krbOid,
-                    GSSCredential.INITIATE_ONLY
-            );
-
-            return ((ExtendedGSSCredential) serviceCred).impersonate(userContext.getSrcName());
-        });
+        try {
+            return subjectManager.doAsService(() -> {
+                var manager = GSSManager.getInstance();
+                Oid krbOid = new Oid(KRB_OID_TAG);
+    
+                GSSCredential serviceCred = manager.createCredential(
+                        manager.createName(kerberosConfig.getServicePrincipal(), GSSName.NT_USER_NAME),
+                        GSSCredential.INDEFINITE_LIFETIME,
+                        krbOid,
+                        GSSCredential.INITIATE_ONLY
+                );
+    
+                return ((ExtendedGSSCredential) serviceCred).impersonate(userContext.getSrcName());
+            });
+        } catch (LoginException e) {
+            log.error("Service login failed", e);
+            throw new RuntimeException(e);
+        }
     }
 
     /**
@@ -187,36 +185,4 @@ public class DelegationAuthProvider implements AuthenticationProvider {
         return "Negotiate " + Base64.getEncoder().encodeToString(outToken);
     }
 
-    private static void setSystemProperties(String krb5ConfigPath, String keytabPath) {
-        System.setProperty("java.security.krb5.conf", krb5ConfigPath);
-        System.setProperty("javax.security.auth.useSubjectCredsOnly", "false");
-        System.setProperty("sun.security.krb5.debug", "true"); // Enable for debugging
-        System.setProperty("sun.security.krb5.allowS4U2ProxyAndDelegate", "true");
-        System.setProperty("java.security.debug", "gssloginconfig,configfile,logincontext");
-        System.setProperty("java.security.krb5.keytab", keytabPath);
-    }
-
-    private static Configuration getJaasConfig(String keytabPath, String servicePrincipal) {
-        return new Configuration() {
-            @Override
-            public AppConfigurationEntry[] getAppConfigurationEntry(String name) {
-                Map<String, Object> options = Map.of(
-                        "keyTab", keytabPath,
-                        "principal", servicePrincipal,
-                        "storeKey", "true",
-                        "useKeyTab", "true",
-                        "doNotPrompt", "true",
-                        "isInitiator", "true",
-                        "refreshKrb5Config", "true"
-                );
-                return new AppConfigurationEntry[]{
-                        new AppConfigurationEntry(
-                                "com.sun.security.auth.module.Krb5LoginModule",
-                                AppConfigurationEntry.LoginModuleControlFlag.REQUIRED,
-                                options
-                        )
-                };
-            }
-        };
-    }
 }
