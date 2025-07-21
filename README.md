@@ -11,6 +11,7 @@ the ip address of the host machine.
 ```
 <HOST-IP> backend.iam.dev
 <HOST-IP> frontend.iam.dev
+<HOST-IP> prefrontend.iam.dev
 ```
 
 your host ip you can get with `ipconfig` for windows and `ifconfig` or `ip addr` for linux.
@@ -94,4 +95,23 @@ kinit user1@IAM.DEV
 kvno HTTP/frontend.iam.dev@IAM.DEV
 kinit -f -k -t /etc/keytabs/frontend.keytab HTTP/frontend.iam.dev@IAM.DEV
 kvno -U user1 -P HTTP/backend.iam.dev@IAM.DEV
+```
+
+## Prefrontend Service
+
+The PreFrontend Service is a service that can be used to test the constrained
+delegation with multiple services in the middle. 
+
+```mermaid
+graph LR;
+    Client-->PreFrontend
+    PreFrontend-->Frontend
+    Frontend-->Backend
+```
+
+The curl request from the client container to the pre-frontend service looks
+like this: 
+
+```bash
+curl --negotiate -u : http://prefrontend.iam.dev:8080/api/v1/todos
 ```
