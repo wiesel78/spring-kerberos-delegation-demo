@@ -28,6 +28,6 @@
         ldap_kdc_dn = ${LDAP_SERVICE_DN}
         ldap_kadmind_dn = ${LDAP_SERVICE_DN}
         ldap_service_password_file = ${LDAP_STASH_FILE_PATH}
-        ldap_servers = ldapi:///
+        ldap_servers = ${LDAP_SERVER_URL}
         ldap_conns_per_server = 5
     }
