@@ -1,0 +1,61 @@
+services:
+  mit:
+    container_name: mit
+    build:
+      context: ./kdc/mit
+      dockerfile: ./Dockerfile
+      additional_contexts:
+        spring_kerberos_delegation_base: "service:spring_kerberos_delegation_base"
+    ports:
+      - "8088:8088/tcp"
+      - "8088:8088/udp"
+      - "8750:8750/tcp"
+    environment:
+      LDAP_SERVER_URL: "ldap://ldap:389/"
+    networks:
+      - delegation_network
+    volumes:
+      - ./kdc/mit/keytabs:/etc/keytabs
+      - ./kdc/mit/provision/:/etc/provision
+      - ./kdc/mit/entrypoint.sh:/entrypoint.sh
+    depends_on:
+      ldap:
+        condition: service_healthy
+
+  ldap:
+    container_name: ldap
+    build:
+      context: ./ldap
+      dockerfile: ./Dockerfile
+      additional_contexts:
+        spring_kerberos_delegation_base: "service:spring_kerberos_delegation_base"
+    ports:
+      - "8389:389"
+      - "8636:636"
+    networks:
+      - delegation_network
+    volumes:
+      - ./kdc/mit/keytabs:/etc/keytabs
+      - ./ldap/entrypoint.sh:/entrypoint.sh
+    healthcheck:
+      test: ["CMD", "ldapsearch", "-x", "-H", "ldap://localhost:389", "-D", "cn=admin,dc=iam,dc=dev", "-b", "cn=kdc-service,dc=iam,dc=dev", "-s", "base", "-w", "P@ssw0rd123"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mit-client:
+    container_name: mit-client
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      additional_contexts:
+        spring_kerberos_delegation_base: "service:spring_kerberos_delegation_base"
+    extra_hosts:
+      - "frontend.iam.dev:host-gateway"
+      - "prefrontend.iam.dev:host-gateway"
+      - "backend.iam.dev:host-gateway"
+    networks:
+      - delegation_network
+    volumes:
+      - ./client/mit-krb5.conf:/etc/krb5.conf
+      - ./kdc/mit/keytabs:/etc/keytabs

@@ -21,41 +21,6 @@ usually the SPN (Service Principal Name) from the dns address of the service you
 send a request to. for example the frontend service `frontend.iam.dev:8081` has
 the SPN `HTTP/frontend.iam.dev`.
 
-## Active Directory kdc and client
-
-setup or adapt your active directory as described in 
-* [Setup a Windows Server VM in Hyper-V](kdc/active-directory/hyperv.md).
-* [Setup Active Directory in Windows Server](kdc/active-directory/windows-server-2025.md).
-
-after that you can deploy a client container to login as a kerberos user and trigger
-the frontend service.
-
-```bash
-docker-compose up -d ad-client
-```
-
-go into the client container
-
-```bash
-docker-compose exec ad-client bash
-```
-
-in the client container login with the kinit command
-
-```bash
-kinit user1@IAM.DEV
-```
-
-type in the password `P@ssw0rd123`.
-
-now you can start the frontend and backend project with the run configuration with the mit suffix.
-
-after that you can send a request to the frontend service from the client container with the curl command
-
-```bash
-curl --negotiate -u : http://frontend.iam.dev:8081/api/v1/todos
-```
-
 
 ## MIT Kerberos kdc and client
 
@@ -63,7 +28,7 @@ to deploy the mit kerberos kdc and the client with the settings for the mit
 kerberos kdc run :
 
 ```bash
-docker-compose up -d mit mit-client
+docker-compose up -d
 ```
 
 go into the client container
@@ -95,6 +60,60 @@ kinit user1@IAM.DEV
 kvno HTTP/frontend.iam.dev@IAM.DEV
 kinit -f -k -t /etc/keytabs/frontend.keytab HTTP/frontend.iam.dev@IAM.DEV
 kvno -U user1 -P HTTP/backend.iam.dev@IAM.DEV
+```
+
+### LDAP
+
+The mit part of this system will deploy a ldap container which can be tested
+on the host with
+
+```bash
+ldapsearch -x -H ldap://localhost:8389 -D "cn=admin,dc=iam,dc=dev" -w "P@ssw0rd123" -b "cn=kdc-service,dc=iam,dc=dev" -s base -w "P@ssw0rd123"
+```
+
+or in the mit-client container with
+
+```bash
+ldapsearch -x -H ldap://ldap:389 -D "cn=admin,dc=iam,dc=dev" -w "P@ssw0rd123" -b "cn=kdc-service,dc=iam,dc=dev" -s base -w "P@ssw0rd123"
+```
+
+### Principals
+
+The principals and service principals are defined in ./kdc/mit/provision/accounts.yml
+
+## Active Directory kdc and client
+
+setup or adapt your active directory as described in 
+* [Setup a Windows Server VM in Hyper-V](kdc/active-directory/hyperv.md).
+* [Setup Active Directory in Windows Server](kdc/active-directory/windows-server-2025.md).
+
+after that you can deploy a client container to login as a kerberos user and trigger
+the frontend service.
+
+```bash
+docker-compose -f docker-compose-ad.yml up -d ad-client
+```
+
+go into the client container
+
+```bash
+docker-compose -f docker-compose-ad.yml exec ad-client bash
+```
+
+in the client container login with the kinit command
+
+```bash
+kinit user1@IAM.DEV
+```
+
+type in the password `P@ssw0rd123`.
+
+now you can start the frontend and backend project with the run configuration with the mit suffix.
+
+after that you can send a request to the frontend service from the client container with the curl command
+
+```bash
+curl --negotiate -u : http://frontend.iam.dev:8081/api/v1/todos
 ```
 
 ## Prefrontend Service

@@ -1,0 +1,14 @@
+include:
+- ./docker-compose-base.yml
+
+services:
+  ad-client:
+    container_name: ad-client
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      additional_contexts:
+        spring_kerberos_delegation_base: "service:spring_kerberos_delegation_base"
+    networks:
+      - delegation_network
+
