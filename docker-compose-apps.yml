@@ -1,0 +1,64 @@
+services:
+
+  prefrontend:
+    container_name: prefrontend
+    build:
+      context: ./preFrontend
+      dockerfile: Dockerfile
+    networks:
+      - delegation_network
+    volumes:
+      - ./kdc/mit/keytabs:/etc/keytabs
+      - ./client/mit-krb5.conf:/etc/krb5.conf
+    environment:
+      - "ACTIVE_PROFILES=mit"
+      - "KERBEROS_KRB5CONFIGPATH=/etc/krb5.conf"
+      - "KERBEROS_KEYTAB=/etc/keytabs/prefrontend.keytab"
+    extra_hosts:
+      - "frontend.iam.dev:host-gateway"
+      - "prefrontend.iam.dev:host-gateway"
+      - "backend.iam.dev:host-gateway"
+    ports:
+      - "8080:8080"
+
+  frontend:
+    container_name: frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    networks:
+      - delegation_network
+    volumes:
+      - ./kdc/mit/keytabs:/etc/keytabs
+      - ./client/mit-krb5.conf:/etc/krb5.conf
+    environment:
+      - "ACTIVE_PROFILES=mit"
+      - "KERBEROS_KRB5CONFIGPATH=/etc/krb5.conf"
+      - "KERBEROS_KEYTAB=/etc/keytabs/frontend.keytab"
+    extra_hosts:
+      - "frontend.iam.dev:host-gateway"
+      - "prefrontend.iam.dev:host-gateway"
+      - "backend.iam.dev:host-gateway"
+    ports:
+      - "8081:8081"
+
+  backend:
+    container_name: backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    networks:
+      - delegation_network
+    volumes:
+      - ./kdc/mit/keytabs:/etc/keytabs
+      - ./client/mit-krb5.conf:/etc/krb5.conf
+    environment:
+      - "ACTIVE_PROFILES=mit"
+      - "KERBEROS_KRB5CONFIGPATH=/etc/krb5.conf"
+      - "KERBEROS_KEYTAB=/etc/keytabs/backend.keytab"
+    extra_hosts:
+      - "frontend.iam.dev:host-gateway"
+      - "prefrontend.iam.dev:host-gateway"
+      - "backend.iam.dev:host-gateway"
+    ports:
+      - "8082:8082"

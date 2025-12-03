@@ -1,0 +1,31 @@
+services:
+  kerby:
+    container_name: kerby
+    build:
+      context: ./kdc/kerby
+      dockerfile: ./Dockerfile
+    ports:
+      - "8888:8888/udp"
+      - "8888:8888/tcp"
+    volumes:
+      - ./kdc/kerby/conf:/opt/kerby/kdc-dist/conf
+      - ./kdc/kerby/keytabs:/opt/kerby/kdc-dist/keytabs
+    networks:
+      - delegation_network
+
+  kerby-client:
+    container_name: kerby-client
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      additional_contexts:
+        spring_kerberos_delegation_base: "service:spring_kerberos_delegation_base"
+    networks:
+      - delegation_network
+    volumes:
+      - ./client/kerby-krb5.conf:/etc/krb5.conf
+
+networks:
+  delegation_network:
+    external: true
+    

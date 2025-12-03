@@ -1,0 +1,13 @@
+services:
+  spring_kerberos_delegation_base:
+    image: spring_kerberos_delegation_base
+    build:
+      context: ./base
+      dockerfile: Dockerfile
+    deploy:
+      replicas: 0
+
+networks:
+  delegation_network:
+    driver: bridge
+    
