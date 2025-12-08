@@ -6,6 +6,12 @@ users:
   - name: user3
     password: P@ssw0rd123
 services:
+  - name: HTTP/keycloak.iam.dev
+    keytab: keycloak.keytab
+    delegates:
+      - HTTP/prefrontend.iam.dev
+      - HTTP/frontend.iam.dev
+      - HTTP/backend.iam.dev
   - name: HTTP/prefrontend.iam.dev
     keytab: prefrontend.keytab
     delegates:

@@ -1,0 +1,26 @@
+services:
+  jcd_keycloak:
+    container_name: jcd_keycloak
+    image: quay.io/keycloak/keycloak:latest
+    ports:
+      - "9080:8080"
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    command: [
+      "start-dev",
+      "--import-realm",
+      "--features=token-exchange,admin-fine-grained-authz",
+      "--log=console,file"
+    ]
+    volumes:
+      - ./client/mit-krb5.conf:/etc/krb5.conf
+      - ./kdc/mit/keytabs:/etc/keytabs
+      - ./keycloak/realms/:/opt/keycloak/data/import:rw
+      - ./keycloak/realms/:/opt/keycloak/data/export:rw
+    networks:
+      - delegation_network
+    depends_on:
+      ldap:
+        condition: service_healthy
+

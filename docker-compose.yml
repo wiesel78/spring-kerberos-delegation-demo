@@ -2,3 +2,4 @@ include:
 - ./docker-compose-base.yml
 - ./docker-compose-mit.yml
 - ./docker-compose-apps.yml
+- ./docker-compose-keycloak.yml
