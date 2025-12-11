@@ -1,3 +1,6 @@
+include:
+- ./docker-compose-base.yml
+
 services:
   mit:
     container_name: mit

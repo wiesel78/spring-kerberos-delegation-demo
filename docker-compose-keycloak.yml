@@ -1,3 +1,6 @@
+include:
+- ./docker-compose-base.yml
+
 services:
   jcd_keycloak:
     container_name: jcd_keycloak

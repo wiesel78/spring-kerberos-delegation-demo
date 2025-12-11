@@ -1,3 +1,6 @@
+include:
+- ./docker-compose-base.yml
+
 services:
   kerby:
     container_name: kerby
